@@ -66,7 +66,6 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		s.unread()
 		return s.scanIdent()
 	}
-	return ILLEGAL, string(ch)
 }
 
 func (s *Scanner) scanNewline() (tok Token, lit string) {

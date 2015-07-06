@@ -1,10 +1,12 @@
-package main
+package util
 
 import (
 	"fmt"
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/johnweldon/nginx-log-parse/nginx"
 )
 
 type Parser struct {
@@ -49,8 +51,8 @@ func (p *Parser) IsEOF() bool {
 	return p.buf.tok == EOF
 }
 
-func (p *Parser) Parse() (*LogLine, error) {
-	line := &LogLine{}
+func (p *Parser) Parse() (*nginx.LogEntry, error) {
+	line := &nginx.LogEntry{}
 
 	if tok, lit := p.scan(); tok != IDENT {
 		p.discardLine()
@@ -216,8 +218,8 @@ func (p *Parser) Parse() (*LogLine, error) {
 	return line, nil
 }
 
-func (p *Parser) GetRecords() []LogLine {
-	lines := []LogLine{}
+func (p *Parser) GetRecords() []nginx.LogEntry {
+	lines := []nginx.LogEntry{}
 	for {
 		if line, err := p.Parse(); err != nil {
 			if p.IsEOF() {

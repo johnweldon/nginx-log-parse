@@ -1,10 +1,10 @@
-package main_test
+package util_test
 
 import (
 	"bytes"
 	"testing"
 
-	. "github.com/johnweldon/nginx-log-parse"
+	. "github.com/johnweldon/nginx-log-parse/util"
 )
 
 func TestParse(t *testing.T) {

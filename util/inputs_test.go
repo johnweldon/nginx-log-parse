@@ -1,4 +1,4 @@
-package main_test
+package util_test
 
 const goodLog = `
 10.10.10.15 - - [28/Jun/2015:07:50:55 -0700] "GET /wpad.dat HTTP/1.1" 304 0 "-" "WinHttp-Autoproxy-Service/5.1"

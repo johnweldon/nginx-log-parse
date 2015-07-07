@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/johnweldon/nginx-log-parse/nginx"
 )
 
@@ -16,10 +18,51 @@ type Parser struct {
 		lit string
 		n   int
 	}
+	EntryCh chan *nginx.LogEntry
+	Log     chan string
+	tomb.Tomb
 }
 
 func NewParser(r io.Reader) *Parser {
-	return &Parser{s: NewScanner(r)}
+	p := &Parser{
+		s:       NewScanner(r),
+		EntryCh: make(chan *nginx.LogEntry),
+		Log:     make(chan string),
+	}
+	p.Go(p.loop)
+	return p
+}
+
+func (p *Parser) loop() error {
+	for {
+		line, err := p.Parse()
+		if err != nil {
+			if p.IsEOF() {
+				p.closeChannels()
+				return err
+			}
+			p.Log <- fmt.Sprintf("Warning: %q", err)
+		}
+		if line == nil {
+			continue
+		}
+		select {
+		case p.EntryCh <- line:
+		case <-p.Dying():
+			p.closeChannels()
+			return nil
+		}
+	}
+}
+
+func (p *Parser) Stop() error {
+	p.Kill(nil)
+	return p.Wait()
+}
+
+func (p *Parser) closeChannels() {
+	close(p.EntryCh)
+	close(p.Log)
 }
 
 func (p *Parser) scan() (tok Token, lit string) {
@@ -216,19 +259,4 @@ func (p *Parser) Parse() (*nginx.LogEntry, error) {
 	}
 
 	return line, nil
-}
-
-func (p *Parser) GetRecords() []nginx.LogEntry {
-	lines := []nginx.LogEntry{}
-	for {
-		if line, err := p.Parse(); err != nil {
-			if p.IsEOF() {
-				break
-			}
-			continue
-		} else {
-			lines = append(lines, *line)
-		}
-	}
-	return lines
 }

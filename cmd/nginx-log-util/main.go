@@ -17,7 +17,7 @@ func main() {
 			}
 			fmt.Fprintf(os.Stdout, "%20s %16s %d %-40s %s\n", record.TimeLocal.Format("2006-01-02 15:04:05"), record.RemoteAddr, record.Status, record.Request, record.HttpReferrer)
 		case log := <-p.Log:
-			fmt.Fprintf(os.Stderr, "%s", log)
+			fmt.Fprintf(os.Stderr, "%s\n", log)
 		case <-p.Dying():
 			return
 		}

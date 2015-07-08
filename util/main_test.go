@@ -23,20 +23,20 @@ func TestParse(t *testing.T) {
 		t.Errorf("Unexpected User Agent, %q", lines[7].HttpUserAgent[13:22])
 	}
 
-	if lines[13].Request != "GET /filter/tips HTTP/1.1" {
-		t.Errorf("Unexpected Request, %q", lines[13].Request)
+	if lines[13].Request.URI != "/filter/tips" {
+		t.Errorf("Unexpected Request, %q", lines[13].Request.URI)
 	}
 
-	if lines[26].Request[:7] != "OPTIONS" {
-		t.Errorf("Unexpected Request, %q", lines[26].Request[:7])
+	if lines[26].Request.Method != "OPTIONS" {
+		t.Errorf("Unexpected Request, %q", lines[26].Request.Method)
 	}
 
 	if lines[32].HttpReferrer != "http://hvd-store.com/" {
 		t.Errorf("Unexpected http referrer, %q", lines[32].HttpReferrer)
 	}
 
-	if lines[38].Request[:4] != "POST" {
-		t.Errorf("Unexpected Request, %q", lines[38].Request[:4])
+	if lines[38].Request.Method != "POST" {
+		t.Errorf("Unexpected Request, %q", lines[38].Request.Method)
 	}
 
 	if lines[44].RemoteAddr != "141.212.122.170" {

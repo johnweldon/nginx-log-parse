@@ -11,46 +11,89 @@ import (
 	"github.com/johnweldon/nginx-log-parse/nginx"
 )
 
+type token struct {
+	T Token
+	L string
+}
+
+type handleToken struct {
+	T Token
+	F func(line nginx.LogLine, t token) error
+}
+
+type handleLine struct {
+	N  string
+	F  func() nginx.LogLine
+	HT []handleToken
+}
+
+var supportedFormats = []handleLine{
+	{N: "Combined", F: func() nginx.LogLine { return &nginx.LogEntry{} }, HT: []handleToken{
+		// RemoteAddr
+		{T: IDENT, F: setRemoteAddr},
+		{T: SPACE, F: discard},
+		// -
+		{T: IDENT, F: discard},
+		{T: SPACE, F: discard},
+		// RemoteUser
+		{T: IDENT, F: setRemoteUser},
+		{T: SPACE, F: discard},
+		// TimeLocal
+		{T: LBRACKET, F: discard},
+		{T: IDENT, F: setTimeLocal},
+		{T: RBRACKET, F: discard},
+		{T: SPACE, F: discard},
+		// Request
+		{T: QUOTE, F: discard},
+		{T: IDENT, F: setRequest},
+		{T: QUOTE, F: discard},
+		{T: SPACE, F: discard},
+		// Status
+		{T: IDENT, F: setStatus},
+		{T: SPACE, F: discard},
+		// BodyBytesSent
+		{T: IDENT, F: setBodyBytesSent},
+		{T: SPACE, F: discard},
+		// HttpReferrer
+		{T: QUOTE, F: discard},
+		{T: IDENT, F: setHttpReferrer},
+		{T: QUOTE, F: discard},
+		{T: SPACE, F: discard},
+		// HttpUserAgent
+		{T: QUOTE, F: discard},
+		{T: IDENT, F: setHttpUserAgent},
+		{T: QUOTE, F: discard},
+	}},
+}
+
 type Parser struct {
-	s   *Scanner
-	buf struct {
-		tok Token
-		lit string
-		n   int
-	}
-	EntryCh chan *nginx.LogEntry
-	Log     chan string
+	s      *Scanner
+	tokens []token
+	LineCh chan nginx.LogLine
 	tomb.Tomb
 }
 
 func NewParser(r io.Reader) *Parser {
 	p := &Parser{
-		s:       NewScanner(r),
-		EntryCh: make(chan *nginx.LogEntry),
-		Log:     make(chan string),
+		s:      NewScanner(r),
+		LineCh: make(chan nginx.LogLine),
 	}
 	p.Go(p.loop)
 	return p
 }
 
-func (p *Parser) loop() error {
+func (p *Parser) GetRecords() []nginx.RequestLine {
+	var records []nginx.RequestLine
 	for {
-		line, err := p.Parse()
-		if err != nil {
-			if p.IsEOF() {
-				p.closeChannels()
-				return err
-			}
-			p.Log <- fmt.Sprintf("Warning: %q", err)
-		}
-		if line == nil {
-			continue
-		}
 		select {
-		case p.EntryCh <- line:
+		case line := <-p.LineCh:
+			record, ok := line.(nginx.RequestLine)
+			if !ok {
+				continue
+			}
+			records = append(records, record)
 		case <-p.Dying():
-			p.closeChannels()
-			return nil
+			return records
 		}
 	}
 }
@@ -60,243 +103,136 @@ func (p *Parser) Stop() error {
 	return p.Wait()
 }
 
-func (p *Parser) closeChannels() {
-	close(p.EntryCh)
-	close(p.Log)
-}
-
-func (p *Parser) scan() (tok Token, lit string) {
-	if p.buf.n != 0 {
-		p.buf.n = 0
-		return p.buf.tok, p.buf.lit
-	}
-	tok, lit = p.s.Scan()
-	p.buf.tok, p.buf.lit = tok, lit
-	return
-}
-
-func (p *Parser) discardLine() {
-	if p.buf.tok == EOF || p.buf.tok == EOL {
-		return
-	}
-	p.buf.n = 0
+func (p *Parser) loadLine() Token {
+	p.tokens = []token{}
 	for {
-		tok, _ := p.s.Scan()
-		if tok == EOF || tok == EOL {
-			return
+		if tok, lit := p.s.Scan(); tok != EOF && tok != EOL {
+			p.tokens = append(p.tokens, token{T: tok, L: lit})
+		} else {
+			return tok
 		}
 	}
 }
 
-func (p *Parser) unscan() { p.buf.n = 1 }
-
-func (p *Parser) IsEOF() bool {
-	return p.buf.tok == EOF
-}
-
-type assign func(string) error
-
-func (p *Parser) ident(expect string, fn assign) error {
-	if tok, lit := p.scan(); tok != IDENT {
-		p.discardLine()
-		return fmt.Errorf("expected %s, got %q", expect, lit)
-	} else {
-		if fn != nil {
-			if err := fn(lit); err != nil {
-				return err
-			}
+func (p *Parser) parseLine() nginx.LogLine {
+	for _, handler := range supportedFormats {
+		if len(p.tokens) != len(handler.HT) {
+			continue
 		}
-		return nil
-	}
-}
-
-func (p *Parser) space() error {
-	if tok, lit := p.scan(); tok != SPACE {
-		p.discardLine()
-		return fmt.Errorf("expected space, got %q", lit)
-	}
-	return nil
-}
-
-func (p *Parser) lbracket() error {
-	if tok, lit := p.scan(); tok != LBRACKET {
-		p.discardLine()
-		return fmt.Errorf("expected [, got %q", lit)
-	}
-	return nil
-}
-
-func (p *Parser) rbracket() error {
-	if tok, lit := p.scan(); tok != RBRACKET {
-		p.discardLine()
-		return fmt.Errorf("expected ], got %q", lit)
-	}
-	return nil
-}
-
-func (p *Parser) quote() error {
-	if tok, lit := p.scan(); tok != QUOTE {
-		p.discardLine()
-		return fmt.Errorf("expected quote, got %q", lit)
-	}
-	return nil
-}
-
-func (p *Parser) eol() error {
-	if tok, lit := p.scan(); tok != EOL {
-		p.discardLine()
-		return fmt.Errorf("expected eol, got %q", lit)
-	}
-	return nil
-}
-
-func (p *Parser) Parse() (*nginx.LogEntry, error) {
-	line := &nginx.LogEntry{}
-
-	if err := p.ident("RemoteAddr", func(i string) error { line.RemoteAddr = i; return nil }); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("-", nil); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("RemoteUser", func(i string) error { line.RemoteUser = i; return nil }); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.lbracket(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("TimeLocal", func(i string) error {
-		t, err := time.Parse("2/Jan/2006:15:04:05 -0700", i)
-		if err != nil {
-			p.discardLine()
-			return fmt.Errorf("expected time local, got %q: %v", i, err)
-		}
-		line.TimeLocal = t
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if err := p.rbracket(); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.quote(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("Request", func(i string) error { line.Request = nginx.NewRequest(i); return nil }); err != nil {
-		return nil, err
-	}
-
-	if err := p.quote(); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("Status", func(i string) error {
-		status, err := strconv.ParseInt(i, 10, 0)
-		if err != nil {
-			p.discardLine()
-			return fmt.Errorf("expected Status, got %q: %v", i, err)
-		}
-		line.Status = int(status)
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("BodyBytesSent", func(i string) error {
-		sent, err := strconv.ParseInt(i, 10, 0)
-		if err != nil {
-			p.discardLine()
-			return fmt.Errorf("expected BodyBytesSent, got %q: %v", i, err)
-		}
-		line.BodyBytesSent = int(sent)
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.quote(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("HttpReferrer", func(i string) error { line.HttpReferrer = i; return nil }); err != nil {
-		return nil, err
-	}
-
-	if err := p.quote(); err != nil {
-		return nil, err
-	}
-
-	if err := p.space(); err != nil {
-		return nil, err
-	}
-
-	if err := p.quote(); err != nil {
-		return nil, err
-	}
-
-	if err := p.ident("HttpUserAgent", func(i string) error { line.HttpUserAgent = i; return nil }); err != nil {
-		return nil, err
-	}
-
-	if err := p.quote(); err != nil {
-		return nil, err
-	}
-
-	if err := p.eol(); err != nil {
-		return nil, err
-	}
-
-	return line, nil
-}
-
-func (p *Parser) GetRecords() []*nginx.LogEntry {
-	var records []*nginx.LogEntry
-	for {
-		select {
-		case record := <-p.EntryCh:
-			if record == nil {
+		l := handler.F()
+		for ix, tok := range p.tokens {
+			if tok.T != handler.HT[ix].T {
 				continue
 			}
-			records = append(records, record)
-		case <-p.Log:
-			continue
+			if err := handler.HT[ix].F(l, tok); err != nil {
+				continue
+			}
+		}
+		return l
+	}
+	return nil
+}
+
+func (p *Parser) loop() error {
+	for {
+		if tok := p.loadLine(); tok == EOF {
+			close(p.LineCh)
+			return nil
+		}
+
+		line := p.parseLine()
+
+		select {
+		case p.LineCh <- line:
 		case <-p.Dying():
-			return records
+			close(p.LineCh)
+			return nil
 		}
 	}
+}
+
+func discard(l nginx.LogLine, t token) error { return nil }
+
+func setRemoteAddr(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	e.RemoteAddr = t.L
+	return nil
+}
+
+func setRemoteUser(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	e.RemoteUser = t.L
+	return nil
+}
+
+func setTimeLocal(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	ti, err := time.Parse("2/Jan/2006:15:04:05 -0700", t.L)
+	if err != nil {
+		return fmt.Errorf("expected time local, got %q: %v", t.L, err)
+	}
+	e.TimeLocal = ti
+	return nil
+}
+
+func setRequest(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	e.Request = nginx.NewRequest(t.L)
+	return nil
+}
+
+func setStatus(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	status, err := strconv.ParseInt(t.L, 10, 0)
+	if err != nil {
+		return fmt.Errorf("expected Status, got %q: %v", t.L, err)
+	}
+	e.Status = int(status)
+	return nil
+}
+
+func setBodyBytesSent(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	status, err := strconv.ParseInt(t.L, 10, 0)
+	if err != nil {
+		return fmt.Errorf("expected BodyBytesSent, got %q: %v", t.L, err)
+	}
+	e.BodyBytesSent = int(status)
+	return nil
+}
+
+func setHttpReferrer(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	e.HttpReferrer = t.L
+	return nil
+}
+
+func setHttpUserAgent(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.LogEntry)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	e.HttpUserAgent = t.L
+	return nil
 }

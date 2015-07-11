@@ -27,8 +27,8 @@ type handleLine struct {
 	HT []handleToken
 }
 
-var supportedFormats = []handleLine{
-	{N: "Combined", F: func() nginx.LogLine { return &nginx.LogEntry{} }, HT: []handleToken{
+var supportedFormats = []handleLine{{
+	N: "Combined", F: func() nginx.LogLine { return &nginx.LogEntry{} }, HT: []handleToken{
 		// RemoteAddr
 		{T: IDENT, F: setRemoteAddr},
 		{T: SPACE, F: discard},
@@ -63,6 +63,16 @@ var supportedFormats = []handleLine{
 		{T: QUOTE, F: discard},
 		{T: IDENT, F: setHttpUserAgent},
 		{T: QUOTE, F: discard},
+	}}, {
+	N: "Tail Divider", F: func() nginx.LogLine { return &nginx.DelimiterLine{} }, HT: []handleToken{
+		// ==>
+		{T: IDENT, F: discard},
+		{T: SPACE, F: discard},
+		// filename
+		{T: IDENT, F: setDelimiterLine},
+		//  <==
+		{T: SPACE, F: discard},
+		{T: IDENT, F: discard},
 	}},
 }
 
@@ -82,12 +92,12 @@ func NewParser(r io.Reader) *Parser {
 	return p
 }
 
-func (p *Parser) GetRecords() []nginx.RequestLine {
-	var records []nginx.RequestLine
+func (p *Parser) GetRecords() []nginx.LogLine {
+	var records []nginx.LogLine
 	for {
 		select {
 		case line := <-p.LineCh:
-			record, ok := line.(nginx.RequestLine)
+			record, ok := line.(nginx.LogLine)
 			if !ok {
 				continue
 			}
@@ -130,7 +140,11 @@ func (p *Parser) parseLine() nginx.LogLine {
 		}
 		return l
 	}
-	return nil
+	line := ""
+	for _, tok := range p.tokens {
+		line = line + tok.L
+	}
+	return &nginx.OtherEntry{Line: line}
 }
 
 func (p *Parser) loop() error {
@@ -234,5 +248,14 @@ func setHttpUserAgent(l nginx.LogLine, t token) error {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
 	e.HttpUserAgent = t.L
+	return nil
+}
+
+func setDelimiterLine(l nginx.LogLine, t token) error {
+	e, ok := l.(*nginx.DelimiterLine)
+	if !ok {
+		return fmt.Errorf("expected l to be a LogEntry")
+	}
+	e.Line = t.L
 	return nil
 }

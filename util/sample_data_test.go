@@ -48,12 +48,13 @@ const (
 118.192.3.4 - - [04/Jul/2015:05:11:33 -0700] "GET / HTTP/1.1" 200 396 "-" "python-requests/2.4.3 CPython/2.7.3 Linux/3.2.0-23-generic"
 141.212.122.170 - - [04/Jul/2015:11:38:16 -0700] "CONNECT google.com:443 HTTP/1.1" 400 181 "-" "-"
 `
+
 	mixedLog = `
 220.181.132.197 - - [01/Jul/2015:23:25:47 -0700] "GET / HTTP/1.1" 200 396 "-" "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.48 Safari/537.36"
 5.9.44.13 - - [02/Jul/2015:03:11:21 -0700] "GET / HTTP/1.1" 200 396 "-" "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.124 Safari/537.36"
 207.90.2.11 - - [02/Jul/2015:07:35:19 -0700] "GET / HTTP/1.0" 200 612 "-" "=Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/534.16 (KHTML, like Gecko) Chrome/10.0.648.204 Safari/534.16"
 89.212.86.109 - - [02/Jul/2015:10:16:55 -0700] "GET / HTTP/1.1" 200 396 "http://videos-for-your-business.com" "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/36.0.1985.143 Safari/537.36"
-
+asdf
 ==> another.file <==
 95.173.183.52 - - [02/Jul/2015:13:29:24 -0700] "OPTIONS / HTTP/1.0" 405 181 "-" "-"
 37.187.129.166 - - [02/Jul/2015:19:10:04 -0700] "GET / HTTP/1.1" 200 396 "http://burger-imperia.com/" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.120 Safari/537.36"

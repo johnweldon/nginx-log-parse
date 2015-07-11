@@ -21,12 +21,14 @@ type testCases struct {
 	Tests  []testCase
 }
 
+func isLogLine(l nginx.LogLine) bool { return true }
 func isRequestLine(l nginx.LogLine) bool {
 	_, ok := l.(nginx.RequestLine)
 	return ok
 }
 
 var (
+	fnLine           = func(l nginx.LogLine) interface{} { return l.String() }
 	fnRequestIP      = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestIP() }
 	fnResponseStatus = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).ResponseStatus() }
 	fnResponseBytes  = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).ResponseBodyBytesSent() }
@@ -39,73 +41,103 @@ var (
 func TestParse(t *testing.T) {
 	tests := []testCases{
 		{
-			Lines:  45,
+			Lines:  46,
 			Source: goodLog,
 			Tests: []testCase{
 				{
 					Index:        0,
+					ExpectedType: isLogLine,
+					Got:          fnLine,
+					Expect:       " unexpected line: ",
+				},
+				{
+					Index:        1,
 					ExpectedType: isRequestLine,
 					Got:          fnRequestIP,
 					Expect:       "10.10.10.15",
 				},
 				{
-					Index:        4,
+					Index:        5,
 					ExpectedType: isRequestLine,
 					Got:          fnResponseStatus,
 					Expect:       404,
 				},
 				{
-					Index:        7,
+					Index:        8,
 					ExpectedType: isRequestLine,
 					Got:          func(l nginx.LogLine) interface{} { return fnUserAgent(l).(string)[13:22] },
 					Expect:       "Macintosh",
 				},
 				{
-					Index:        13,
+					Index:        14,
 					ExpectedType: isRequestLine,
 					Got:          fnURI,
 					Expect:       "/filter/tips",
 				},
 				{
-					Index:        26,
+					Index:        27,
 					ExpectedType: isRequestLine,
 					Got:          fnRequestMethod,
 					Expect:       "OPTIONS",
 				},
 				{
-					Index:        32,
+					Index:        33,
 					ExpectedType: isRequestLine,
 					Got:          fnReferrer,
 					Expect:       "http://hvd-store.com/",
 				},
 				{
-					Index:        38,
+					Index:        39,
 					ExpectedType: isRequestLine,
 					Got:          fnRequestMethod,
 					Expect:       "POST",
 				},
 				{
-					Index:        44,
+					Index:        45,
 					ExpectedType: isRequestLine,
 					Got:          fnRequestIP,
 					Expect:       "141.212.122.170",
 				},
 			},
 		}, {
-			Lines:  8,
+			Lines:  11,
 			Source: mixedLog,
 			Tests: []testCase{
 				{
 					Index:        0,
+					ExpectedType: isLogLine,
+					Got:          fnLine,
+					Expect:       " unexpected line: ",
+				},
+				{
+					Index:        1,
 					ExpectedType: isRequestLine,
 					Got:          fnURI,
 					Expect:       "/",
 				},
 				{
+					Index:        5,
+					ExpectedType: isLogLine,
+					Got:          fnLine,
+					Expect:       " unexpected line: asdf",
+				},
+				{
+					Index:        6,
+					ExpectedType: isLogLine,
+					Got:          fnLine,
+					Expect:       "FILE: another.file",
+				},
+				{
 					Index:        7,
 					ExpectedType: isRequestLine,
 					Got:          fnResponseBytes,
-					Expect:       396,
+					Expect:       181,
+				},
+				{
+					Index:        10,
+					ExpectedType: isRequestLine,
+					Got:          fnRequestIP,
+					Expect:       "113.247.42.246",
 				},
 			},
 		},
@@ -124,7 +156,7 @@ func TestParse(t *testing.T) {
 				continue
 			}
 			if !test.ExpectedType(line) {
-				t.Errorf("testCase: %d: unexpected type for test %d: %t", tci, ti, line)
+				t.Errorf("testCase: %d: unexpected type for test %d: %T", tci, ti, line)
 				continue
 			}
 			if !reflect.DeepEqual(test.Got(line), test.Expect) {

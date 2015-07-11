@@ -34,11 +34,15 @@ type OtherEntry struct {
 }
 
 func (o *OtherEntry) String() string {
-	return o.Line
+	return fmt.Sprintf(" unexpected line: %s", o.Line)
 }
 
 type DelimiterLine struct {
 	OtherEntry
+}
+
+func (d *DelimiterLine) String() string {
+	return fmt.Sprintf("FILE: %s", d.Line)
 }
 
 type Request struct {

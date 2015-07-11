@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/johnweldon/nginx-log-parse/nginx"
 	"github.com/johnweldon/nginx-log-parse/util"
 )
 
@@ -13,11 +12,9 @@ func main() {
 	for {
 		select {
 		case line := <-p.LineCh:
-			record, ok := line.(nginx.RequestLine)
-			if !ok {
-				continue
+			if line != nil {
+				fmt.Fprintf(os.Stdout, "%s\n", line)
 			}
-			fmt.Fprintf(os.Stdout, "%s\n", record)
 		case <-p.Dying():
 			return
 		}

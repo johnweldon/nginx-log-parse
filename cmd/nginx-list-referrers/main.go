@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 
 	"github.com/johnweldon/nginx-log-parse/nginx"
@@ -13,7 +14,7 @@ func main() {
 	referrers := getReferrers(os.Stdin)
 
 	for r, c := range referrers {
-		fmt.Fprintf(os.Stdout, "%-40s :: %d\n", r, c)
+		fmt.Fprintf(os.Stdout, "%5d %s\n", c, r)
 	}
 }
 
@@ -26,7 +27,14 @@ func getReferrers(in io.Reader) map[string]int {
 			if line != nil {
 				if rl, ok := line.(nginx.RequestLine); ok {
 					referrer := rl.RequestHttpReferrer()
-					referrers[referrer] += 1
+					if referrer == "-" {
+						continue
+					}
+					if u, err := url.Parse(referrer); err == nil {
+						referrers[u.Scheme+"://"+u.Host] += 1
+					} else {
+						referrers[referrer] += 1
+					}
 				}
 			}
 		case <-p.Dying():

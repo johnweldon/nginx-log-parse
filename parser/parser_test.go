@@ -1,4 +1,4 @@
-package util_test
+package parser_test
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/johnweldon/nginx-log-parse/nginx"
-	. "github.com/johnweldon/nginx-log-parse/util"
+	. "github.com/johnweldon/nginx-log-parse/parser"
 )
 
 type testCase struct {
@@ -144,7 +144,7 @@ func TestParse(t *testing.T) {
 	}
 
 	for tci, testCase := range tests {
-		p := NewParser(bytes.NewReader([]byte(testCase.Source)))
+		p := NewLogFileParser(bytes.NewReader([]byte(testCase.Source)))
 		lines := p.GetRecords()
 		if len(lines) != testCase.Lines {
 			t.Fatalf("expected %d lines, but got %d", testCase.Lines, len(lines))

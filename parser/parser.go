@@ -1,4 +1,4 @@
-package util
+package parser
 
 import (
 	"fmt"
@@ -65,26 +65,26 @@ var supportedFormats = []handleLine{{
 		{T: QUOTE, F: discard},
 	}}, {
 	N: "Tail Divider", F: func() nginx.LogLine { return &nginx.DelimiterLine{} }, HT: []handleToken{
-		// ==>
+		// ==> (or any contiguous symbol actually)
 		{T: IDENT, F: discard},
 		{T: SPACE, F: discard},
 		// filename
 		{T: IDENT, F: setDelimiterLine},
-		//  <==
+		//  <== (or any contiguous symbol actually)
 		{T: SPACE, F: discard},
 		{T: IDENT, F: discard},
 	}},
 }
 
-type Parser struct {
+type LogFileParser struct {
 	s      *Scanner
 	tokens []token
 	LineCh chan nginx.LogLine
 	tomb.Tomb
 }
 
-func NewParser(r io.Reader) *Parser {
-	p := &Parser{
+func NewLogFileParser(r io.Reader) *LogFileParser {
+	p := &LogFileParser{
 		s:      NewScanner(r),
 		LineCh: make(chan nginx.LogLine),
 	}
@@ -92,7 +92,7 @@ func NewParser(r io.Reader) *Parser {
 	return p
 }
 
-func (p *Parser) GetRecords() []nginx.LogLine {
+func (p *LogFileParser) GetRecords() []nginx.LogLine {
 	var records []nginx.LogLine
 	for {
 		select {
@@ -108,12 +108,12 @@ func (p *Parser) GetRecords() []nginx.LogLine {
 	}
 }
 
-func (p *Parser) Stop() error {
+func (p *LogFileParser) Stop() error {
 	p.Kill(nil)
 	return p.Wait()
 }
 
-func (p *Parser) loadLine() Token {
+func (p *LogFileParser) loadLine() Token {
 	p.tokens = []token{}
 	for {
 		if tok, lit := p.s.Scan(); tok != EOF && tok != EOL {
@@ -124,7 +124,7 @@ func (p *Parser) loadLine() Token {
 	}
 }
 
-func (p *Parser) parseLine() nginx.LogLine {
+func (p *LogFileParser) parseLine() nginx.LogLine {
 	for _, handler := range supportedFormats {
 		if len(p.tokens) != len(handler.HT) {
 			continue
@@ -147,7 +147,7 @@ func (p *Parser) parseLine() nginx.LogLine {
 	return &nginx.OtherEntry{Line: line}
 }
 
-func (p *Parser) loop() error {
+func (p *LogFileParser) loop() error {
 	for {
 		if tok := p.loadLine(); tok == EOF {
 			close(p.LineCh)

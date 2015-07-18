@@ -1,4 +1,4 @@
-package util_test
+package parser_test
 
 const (
 	goodLog = `

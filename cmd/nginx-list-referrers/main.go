@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/johnweldon/nginx-log-parse/nginx"
-	"github.com/johnweldon/nginx-log-parse/util"
+	"github.com/johnweldon/nginx-log-parse/parser"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 }
 
 func getReferrers(in io.Reader) map[string]int {
-	p := util.NewParser(in)
+	p := parser.NewLogFileParser(in)
 	referrers := map[string]int{}
 	for {
 		select {

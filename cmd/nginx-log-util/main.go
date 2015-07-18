@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/johnweldon/nginx-log-parse/util"
+	"github.com/johnweldon/nginx-log-parse/parser"
 )
 
 func main() {
-	p := util.NewParser(os.Stdin)
+	p := parser.NewLogFileParser(os.Stdin)
 	for {
 		select {
 		case line := <-p.LineCh:

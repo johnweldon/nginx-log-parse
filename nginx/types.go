@@ -15,8 +15,8 @@ var _ LogLine = (*DelimiterLine)(nil)
 
 type RequestLine interface {
 	LogLine
-	RequestHttpReferrer() string
-	RequestHttpUserAgent() string
+	RequestHTTPReferrer() string
+	RequestHTTPUserAgent() string
 	RequestIP() string
 	RequestMethod() string
 	RequestProtocol() string
@@ -59,9 +59,8 @@ func NewRequest(ident string) Request {
 			URI:      parts[1],
 			Protocol: parts[2],
 		}
-	} else {
-		return Request{}
 	}
+	return Request{}
 }
 
 type LogEntry struct {
@@ -71,12 +70,12 @@ type LogEntry struct {
 	Request       Request
 	Status        int
 	BodyBytesSent int
-	HttpReferrer  string
-	HttpUserAgent string
+	HTTPReferrer  string
+	HTTPUserAgent string
 }
 
-func (e *LogEntry) RequestHttpReferrer() string  { return e.HttpReferrer }
-func (e *LogEntry) RequestHttpUserAgent() string { return e.HttpUserAgent }
+func (e *LogEntry) RequestHTTPReferrer() string  { return e.HTTPReferrer }
+func (e *LogEntry) RequestHTTPUserAgent() string { return e.HTTPUserAgent }
 func (e *LogEntry) RequestIP() string            { return e.RemoteAddr }
 func (e *LogEntry) RequestMethod() string        { return e.Request.Method }
 func (e *LogEntry) RequestProtocol() string      { return e.Request.Protocol }
@@ -93,6 +92,6 @@ func (e *LogEntry) String() string {
 		e.Status,
 		e.Request.Method,
 		e.Request.URI,
-		e.HttpReferrer,
-		e.HttpUserAgent)
+		e.HTTPReferrer,
+		e.HTTPUserAgent)
 }

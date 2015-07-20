@@ -26,14 +26,14 @@ func getReferrers(in io.Reader) map[string]int {
 		case line := <-p.LineCh:
 			if line != nil {
 				if rl, ok := line.(nginx.RequestLine); ok {
-					referrer := rl.RequestHttpReferrer()
+					referrer := rl.RequestHTTPReferrer()
 					if referrer == "-" {
 						continue
 					}
 					if u, err := url.Parse(referrer); err == nil {
-						referrers[u.Scheme+"://"+u.Host] += 1
+						referrers[u.Scheme+"://"+u.Host]++
 					} else {
-						referrers[referrer] += 1
+						referrers[referrer]++
 					}
 				}
 			}

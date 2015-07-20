@@ -32,10 +32,10 @@ var (
 	fnRequestIP      = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestIP() }
 	fnResponseStatus = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).ResponseStatus() }
 	fnResponseBytes  = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).ResponseBodyBytesSent() }
-	fnUserAgent      = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestHttpUserAgent() }
+	fnUserAgent      = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestHTTPUserAgent() }
 	fnURI            = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestURI() }
 	fnRequestMethod  = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestMethod() }
-	fnReferrer       = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestHttpReferrer() }
+	fnReferrer       = func(l nginx.LogLine) interface{} { return l.(nginx.RequestLine).RequestHTTPReferrer() }
 )
 
 func TestParse(t *testing.T) {

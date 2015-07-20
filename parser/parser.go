@@ -54,14 +54,14 @@ var supportedFormats = []handleLine{{
 		// BodyBytesSent
 		{T: IDENT, F: setBodyBytesSent},
 		{T: SPACE, F: discard},
-		// HttpReferrer
+		// HTTPReferrer
 		{T: QUOTE, F: discard},
-		{T: IDENT, F: setHttpReferrer},
+		{T: IDENT, F: setHTTPReferrer},
 		{T: QUOTE, F: discard},
 		{T: SPACE, F: discard},
-		// HttpUserAgent
+		// HTTPUserAgent
 		{T: QUOTE, F: discard},
-		{T: IDENT, F: setHttpUserAgent},
+		{T: IDENT, F: setHTTPUserAgent},
 		{T: QUOTE, F: discard},
 	}}, {
 	N: "Tail Divider", F: func() nginx.LogLine { return &nginx.DelimiterLine{} }, HT: []handleToken{
@@ -234,21 +234,21 @@ func setBodyBytesSent(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setHttpReferrer(l nginx.LogLine, t token) error {
+func setHTTPReferrer(l nginx.LogLine, t token) error {
 	e, ok := l.(*nginx.LogEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
-	e.HttpReferrer = t.L
+	e.HTTPReferrer = t.L
 	return nil
 }
 
-func setHttpUserAgent(l nginx.LogLine, t token) error {
+func setHTTPUserAgent(l nginx.LogLine, t token) error {
 	e, ok := l.(*nginx.LogEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
-	e.HttpUserAgent = t.L
+	e.HTTPUserAgent = t.L
 	return nil
 }
 

@@ -34,9 +34,9 @@ func main() {
 		if _, ok := res[status][method]; !ok {
 			res[status][method] = map[string]int{}
 		}
-		res[status][method][path] += 1
+		res[status][method][path]++
 	}
-	js, err := ToJSON(res)
+	js, err := toJSON(res)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %s", err)
 		os.Exit(1)
@@ -44,6 +44,6 @@ func main() {
 	fmt.Fprintf(os.Stdout, "\n%s\n", js)
 }
 
-func ToJSON(i interface{}) ([]byte, error) {
+func toJSON(i interface{}) ([]byte, error) {
 	return json.MarshalIndent(i, "", "  ")
 }

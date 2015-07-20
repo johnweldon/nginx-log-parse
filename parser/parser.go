@@ -83,6 +83,7 @@ type LogFileParser struct {
 	tomb.Tomb
 }
 
+func NewParser(r io.Reader) *LogFileParser { return NewLogFileParser(r) }
 func NewLogFileParser(r io.Reader) *LogFileParser {
 	p := &LogFileParser{
 		s:      NewScanner(r),

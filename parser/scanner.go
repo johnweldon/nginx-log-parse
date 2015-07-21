@@ -6,42 +6,42 @@ import (
 	"io"
 )
 
-type Token int
-
-const (
-	ILLEGAL Token = iota
-	EOF
-	EOL
-	SPACE
-	QUOTE
-	LBRACKET
-	RBRACKET
-	IDENT
-)
-
-var eof = rune(0)
-
-type Scanner struct {
+type scanner struct {
 	r         *bufio.Reader
 	inQuote   bool
 	inBracket bool
 }
 
-func NewScanner(r io.Reader) *Scanner {
-	return &Scanner{r: bufio.NewReader(r)}
+type token int
+
+const (
+	illegal token = iota
+	eof
+	eol
+	space
+	quote
+	lbracket
+	rbracket
+	ident
+)
+
+var eofRune = rune(0)
+
+func newScanner(r io.Reader) *scanner {
+	return &scanner{r: bufio.NewReader(r)}
 }
 
-func (s *Scanner) read() rune {
+func (s *scanner) read() rune {
 	ch, _, err := s.r.ReadRune()
 	if err != nil {
-		return eof
+		return eofRune
 	}
 	return ch
 }
 
-func (s *Scanner) unread() { _ = s.r.UnreadRune() }
+func (s *scanner) unread() { _ = s.r.UnreadRune() }
 
-func (s *Scanner) Scan() (tok Token, lit string) {
+func (s *scanner) scan() (tok token, lit string) {
 	ch := s.read()
 
 	if isNewline(ch) {
@@ -49,42 +49,42 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return s.scanNewline()
 	}
 	switch ch {
-	case eof:
-		return EOF, ""
+	case eofRune:
+		return eof, ""
 	case ' ':
-		return SPACE, " "
+		return space, " "
 	case '"':
 		s.inQuote = !s.inQuote
-		return QUOTE, `"`
+		return quote, `"`
 	case '[':
 		s.inBracket = true
-		return LBRACKET, "["
+		return lbracket, "["
 	case ']':
 		s.inBracket = false
-		return RBRACKET, "]"
+		return rbracket, "]"
 	default:
 		s.unread()
 		return s.scanIdent()
 	}
 }
 
-func (s *Scanner) scanNewline() (tok Token, lit string) {
+func (s *scanner) scanNewline() (tok token, lit string) {
 	for {
-		if ch := s.read(); ch == eof {
+		if ch := s.read(); ch == eofRune {
 			break
 		} else if !isNewline(ch) {
 			s.unread()
 			break
 		}
 	}
-	return EOL, "\n"
+	return eol, "\n"
 }
 
-func (s *Scanner) scanIdent() (tok Token, lit string) {
+func (s *scanner) scanIdent() (tok token, lit string) {
 	var buf bytes.Buffer
 	buf.WriteRune(s.read())
 	for {
-		if ch := s.read(); ch == eof {
+		if ch := s.read(); ch == eofRune {
 			break
 		} else if isNewline(ch) {
 			s.unread()
@@ -104,7 +104,7 @@ func (s *Scanner) scanIdent() (tok Token, lit string) {
 			break
 		}
 	}
-	return IDENT, buf.String()
+	return ident, buf.String()
 }
 
 func isNewline(ch rune) bool {

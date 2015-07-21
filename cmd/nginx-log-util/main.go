@@ -8,10 +8,10 @@ import (
 )
 
 func main() {
-	p := parser.NewLogFileParser(os.Stdin)
+	p := parser.NewEngine(os.Stdin)
 	for {
 		select {
-		case line := <-p.LineCh:
+		case line := <-p.LogLines():
 			if line != nil {
 				fmt.Fprintf(os.Stdout, "%s\n", line)
 			}

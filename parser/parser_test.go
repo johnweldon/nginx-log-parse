@@ -144,7 +144,7 @@ func TestParse(t *testing.T) {
 	}
 
 	for tci, testCase := range tests {
-		p := NewLogFileParser(bytes.NewReader([]byte(testCase.Source)))
+		p := NewEngine(bytes.NewReader([]byte(testCase.Source)))
 		lines := p.GetRecords()
 		if len(lines) != testCase.Lines {
 			t.Fatalf("expected %d lines, but got %d", testCase.Lines, len(lines))

@@ -19,11 +19,11 @@ func main() {
 }
 
 func getReferrers(in io.Reader) map[string]int {
-	p := parser.NewLogFileParser(in)
+	p := parser.NewEngine(in)
 	referrers := map[string]int{}
 	for {
 		select {
-		case line := <-p.LineCh:
+		case line := <-p.LogLines():
 			if line != nil {
 				if rl, ok := line.(nginx.RequestLine); ok {
 					referrer := rl.RequestHTTPReferrer()

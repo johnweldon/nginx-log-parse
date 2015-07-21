@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	p := parser.NewParser(os.Stdin)
+	p := parser.NewEngine(os.Stdin)
 	records := p.GetRecords()
 
 	res := map[string]map[string]map[string]int{}

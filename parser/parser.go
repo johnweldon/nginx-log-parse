@@ -11,14 +11,29 @@ import (
 	"github.com/johnweldon/nginx-log-parse/nginx"
 )
 
-type token struct {
-	T Token
+// Engine describes the minimal parser engine for the nginx logfiles.
+type Engine interface {
+	GetRecords() []nginx.LogLine
+	LogLines() <-chan nginx.LogLine
+	Dying() <-chan struct{}
+	Stop() error
+}
+
+type logFileParser struct {
+	s      *scanner
+	tokens []tokenLiteral
+	LineCh chan nginx.LogLine
+	tomb.Tomb
+}
+
+type tokenLiteral struct {
+	T token
 	L string
 }
 
 type handleToken struct {
-	T Token
-	F func(line nginx.LogLine, t token) error
+	T token
+	F func(line nginx.LogLine, t tokenLiteral) error
 }
 
 type handleLine struct {
@@ -28,72 +43,58 @@ type handleLine struct {
 }
 
 var supportedFormats = []handleLine{{
-	N: "Combined", F: func() nginx.LogLine { return &nginx.LogEntry{} }, HT: []handleToken{
+	N: "Combined", F: func() nginx.LogLine { return &logEntry{} }, HT: []handleToken{
 		// RemoteAddr
-		{T: IDENT, F: setRemoteAddr},
-		{T: SPACE, F: discard},
+		{T: ident, F: setRemoteAddr},
+		{T: space, F: discard},
 		// -
-		{T: IDENT, F: discard},
-		{T: SPACE, F: discard},
+		{T: ident, F: discard},
+		{T: space, F: discard},
 		// RemoteUser
-		{T: IDENT, F: setRemoteUser},
-		{T: SPACE, F: discard},
+		{T: ident, F: setRemoteUser},
+		{T: space, F: discard},
 		// TimeLocal
-		{T: LBRACKET, F: discard},
-		{T: IDENT, F: setTimeLocal},
-		{T: RBRACKET, F: discard},
-		{T: SPACE, F: discard},
+		{T: lbracket, F: discard},
+		{T: ident, F: setTimeLocal},
+		{T: rbracket, F: discard},
+		{T: space, F: discard},
 		// Request
-		{T: QUOTE, F: discard},
-		{T: IDENT, F: setRequest},
-		{T: QUOTE, F: discard},
-		{T: SPACE, F: discard},
+		{T: quote, F: discard},
+		{T: ident, F: setRequest},
+		{T: quote, F: discard},
+		{T: space, F: discard},
 		// Status
-		{T: IDENT, F: setStatus},
-		{T: SPACE, F: discard},
+		{T: ident, F: setStatus},
+		{T: space, F: discard},
 		// BodyBytesSent
-		{T: IDENT, F: setBodyBytesSent},
-		{T: SPACE, F: discard},
+		{T: ident, F: setBodyBytesSent},
+		{T: space, F: discard},
 		// HTTPReferrer
-		{T: QUOTE, F: discard},
-		{T: IDENT, F: setHTTPReferrer},
-		{T: QUOTE, F: discard},
-		{T: SPACE, F: discard},
+		{T: quote, F: discard},
+		{T: ident, F: setHTTPReferrer},
+		{T: quote, F: discard},
+		{T: space, F: discard},
 		// HTTPUserAgent
-		{T: QUOTE, F: discard},
-		{T: IDENT, F: setHTTPUserAgent},
-		{T: QUOTE, F: discard},
+		{T: quote, F: discard},
+		{T: ident, F: setHTTPUserAgent},
+		{T: quote, F: discard},
 	}}, {
-	N: "Tail Divider", F: func() nginx.LogLine { return &nginx.DelimiterLine{} }, HT: []handleToken{
+	N: "Tail Divider", F: func() nginx.LogLine { return &delimiterLine{} }, HT: []handleToken{
 		// ==> (or any contiguous symbol actually)
-		{T: IDENT, F: discard},
-		{T: SPACE, F: discard},
+		{T: ident, F: discard},
+		{T: space, F: discard},
 		// filename
-		{T: IDENT, F: setDelimiterLine},
+		{T: ident, F: setDelimiterLine},
 		//  <== (or any contiguous symbol actually)
-		{T: SPACE, F: discard},
-		{T: IDENT, F: discard},
+		{T: space, F: discard},
+		{T: ident, F: discard},
 	}},
 }
 
-type LogFileParser struct {
-	s      *Scanner
-	tokens []token
-	LineCh chan nginx.LogLine
-	tomb.Tomb
-}
+// NewEngine returns an Engine implementation.
+func NewEngine(r io.Reader) Engine { return newLogFileParser(r) }
 
-func NewParser(r io.Reader) *LogFileParser { return NewLogFileParser(r) }
-func NewLogFileParser(r io.Reader) *LogFileParser {
-	p := &LogFileParser{
-		s:      NewScanner(r),
-		LineCh: make(chan nginx.LogLine),
-	}
-	p.Go(p.loop)
-	return p
-}
-
-func (p *LogFileParser) GetRecords() []nginx.LogLine {
+func (p *logFileParser) GetRecords() []nginx.LogLine {
 	var records []nginx.LogLine
 	for {
 		select {
@@ -109,23 +110,36 @@ func (p *LogFileParser) GetRecords() []nginx.LogLine {
 	}
 }
 
-func (p *LogFileParser) Stop() error {
+func (p *logFileParser) LogLines() <-chan nginx.LogLine {
+	return p.LineCh
+}
+
+func (p *logFileParser) Stop() error {
 	p.Kill(nil)
 	return p.Wait()
 }
 
-func (p *LogFileParser) loadLine() Token {
-	p.tokens = []token{}
+func newLogFileParser(r io.Reader) *logFileParser {
+	p := &logFileParser{
+		s:      newScanner(r),
+		LineCh: make(chan nginx.LogLine),
+	}
+	p.Go(p.loop)
+	return p
+}
+
+func (p *logFileParser) loadLine() token {
+	p.tokens = []tokenLiteral{}
 	for {
-		if tok, lit := p.s.Scan(); tok != EOF && tok != EOL {
-			p.tokens = append(p.tokens, token{T: tok, L: lit})
+		if tok, lit := p.s.scan(); tok != eof && tok != eol {
+			p.tokens = append(p.tokens, tokenLiteral{T: tok, L: lit})
 		} else {
 			return tok
 		}
 	}
 }
 
-func (p *LogFileParser) parseLine() nginx.LogLine {
+func (p *logFileParser) parseLine() nginx.LogLine {
 	for _, handler := range supportedFormats {
 		if len(p.tokens) != len(handler.HT) {
 			continue
@@ -145,12 +159,12 @@ func (p *LogFileParser) parseLine() nginx.LogLine {
 	for _, tok := range p.tokens {
 		line = line + tok.L
 	}
-	return &nginx.OtherEntry{Line: line}
+	return &otherEntry{Line: line}
 }
 
-func (p *LogFileParser) loop() error {
+func (p *logFileParser) loop() error {
 	for {
-		if tok := p.loadLine(); tok == EOF {
+		if tok := p.loadLine(); tok == eof {
 			close(p.LineCh)
 			return nil
 		}
@@ -166,10 +180,10 @@ func (p *LogFileParser) loop() error {
 	}
 }
 
-func discard(l nginx.LogLine, t token) error { return nil }
+func discard(l nginx.LogLine, t tokenLiteral) error { return nil }
 
-func setRemoteAddr(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setRemoteAddr(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -177,8 +191,8 @@ func setRemoteAddr(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setRemoteUser(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setRemoteUser(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -186,8 +200,8 @@ func setRemoteUser(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setTimeLocal(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setTimeLocal(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -199,17 +213,17 @@ func setTimeLocal(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setRequest(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setRequest(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
-	e.Request = nginx.NewRequest(t.L)
+	e.Request = newRequest(t.L)
 	return nil
 }
 
-func setStatus(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setStatus(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -221,8 +235,8 @@ func setStatus(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setBodyBytesSent(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setBodyBytesSent(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -234,8 +248,8 @@ func setBodyBytesSent(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setHTTPReferrer(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setHTTPReferrer(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -243,8 +257,8 @@ func setHTTPReferrer(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setHTTPUserAgent(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.LogEntry)
+func setHTTPUserAgent(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*logEntry)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
@@ -252,8 +266,8 @@ func setHTTPUserAgent(l nginx.LogLine, t token) error {
 	return nil
 }
 
-func setDelimiterLine(l nginx.LogLine, t token) error {
-	e, ok := l.(*nginx.DelimiterLine)
+func setDelimiterLine(l nginx.LogLine, t tokenLiteral) error {
+	e, ok := l.(*delimiterLine)
 	if !ok {
 		return fmt.Errorf("expected l to be a LogEntry")
 	}
